@@ -7,17 +7,54 @@ package ssatr.service;
  * Este actualizată de thread-urile MessageProcessor și citită de CommandConsole,
  * deci accesul trebuie sincronizat.
  */
+
+import java.util.Locale;
+import java.util.Map;
+import java.util.TreeMap;
+
 public class Dashboard {
 
-    // TODO 5: alegeți structura de date pentru starea device-urilor
-    //   (de exemplu un Map<String, ...> cu cheia deviceId)
-    //   și adăugați metodele de actualizare apelate din MessageProcessor.
+    private static class DeviceState {
+        double lastTemperature = Double.NaN;
+        long lastMessageMs;
+        int alarmCount;
+    }
 
-    /** Afișează un tabel cu starea tuturor device-urilor. */
-    public void print() {
-        // TODO 5: afișați câte un rând pentru fiecare device, de exemplu:
-        //   DEVICE     TEMP    ULTIMUL MESAJ   ALARME
-        //   device-1   23.41   acum 1 s        2
-        System.out.println("(dashboard neimplementat)");
+    private final Map<String, DeviceState> devices = new TreeMap<>();
+
+    private DeviceState stateOf(String deviceId) {
+        return devices.computeIfAbsent(deviceId, id -> new DeviceState());
+    }
+
+    public synchronized void updateTelemetry(String deviceId, double temperature) {
+        DeviceState state = stateOf(deviceId);
+        state.lastTemperature = temperature;
+        state.lastMessageMs = System.currentTimeMillis();
+    }
+
+    public synchronized void updateAlarm(String deviceId) {
+        DeviceState state = stateOf(deviceId);
+        state.alarmCount++;
+        state.lastMessageMs = System.currentTimeMillis();
+    }
+
+    public synchronized void updateStatus(String deviceId) {
+        stateOf(deviceId).lastMessageMs = System.currentTimeMillis();
+    }
+
+    public synchronized void print() {
+        if (devices.isEmpty()) {
+            System.out.println("Niciun device nu a trimis mesaje inca.");
+            return;
+        }
+        long now = System.currentTimeMillis();
+        System.out.printf("%-12s %-8s %-16s %s%n", "DEVICE", "TEMP", "ULTIMUL MESAJ", "ALARME");
+        for (Map.Entry<String, DeviceState> entry : devices.entrySet()) {
+            DeviceState state = entry.getValue();
+            String temperature = Double.isNaN(state.lastTemperature)
+                    ? "-" : String.format(Locale.US, "%.2f", state.lastTemperature);
+            String age = String.format(Locale.US, "acum %.1f s", (now - state.lastMessageMs) / 1000.0);
+            System.out.printf("%-12s %-8s %-16s %d%n", entry.getKey(), temperature, age, state.alarmCount);
+        }
     }
 }

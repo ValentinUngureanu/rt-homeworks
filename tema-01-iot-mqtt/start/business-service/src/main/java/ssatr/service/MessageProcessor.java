@@ -27,12 +27,51 @@ public class MessageProcessor implements Runnable {
 
     @Override
     public void run() {
-        // TODO 4: într-o buclă:
-        //   - preluați un mesaj: inbox.take()
-        //   - salvați mesajul în fișierul CSV: storage.append(kind, mesaj)
-        //     (CsvStorage este gata implementată)
-        //   - actualizați dashboard-ul, în funcție de kind
-        //   - alarmele și confirmările se afișează imediat în consolă
-        //   - un mesaj greșit (format invalid) nu trebuie să oprească thread-ul
+        try {
+            while (true) {
+                String message = inbox.take();
+                try {
+                    process(message);
+                } catch (RuntimeException e) {
+                    System.out.println("[" + kind + "] mesaj invalid: " + message);
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void process(String message) {
+        storage.append(kind, message);
+
+        switch (kind) {
+            case "telemetry": {
+                String[] fields = message.split(";");
+                String deviceId = fields[0];
+                double temperature = Double.parseDouble(fields[2]);
+                dashboard.updateTelemetry(deviceId, temperature);
+                break;
+            }
+            case "alarm": {
+                String[] fields = message.split(";");
+                String deviceId = fields[0];
+                double temperature = Double.parseDouble(fields[2]);
+                double threshold = Double.parseDouble(fields[3]);
+                dashboard.updateAlarm(deviceId);
+                System.out.printf("[ALARMA] %s: temperatura %.2f depaseste pragul %.2f%n",
+                        deviceId, temperature, threshold);
+                break;
+            }
+            case "status": {
+                String[] fields = message.split(";", 3);
+                String deviceId = fields[0];
+                String text = fields[2];
+                dashboard.updateStatus(deviceId);
+                System.out.println("[STATUS] " + deviceId + ": " + text);
+                break;
+            }
+            default:
+                throw new IllegalArgumentException("tip necunoscut: " + kind);
+        }
     }
 }
